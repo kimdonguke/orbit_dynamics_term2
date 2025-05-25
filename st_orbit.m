@@ -239,3 +239,22 @@ function find_proximity_and_area(r_sat_all, v_sat_all, ...
 
     return;
 end
+
+function [r_list, v_list] = split_state_matrix(data)
+    % split_state_matrix
+    % -------------------
+    % 입력:
+    %   data: M x 6 행렬 [r_x, r_y, r_z, v_x, v_y, v_z]
+    %
+    % 출력:
+    %   r_list: M x 3 위치 행렬
+    %   v_list: M x 3 속도 행렬
+
+    if size(data,2) ~= 6
+        error('입력 행렬은 반드시 6열이어야 합니다. [r_x, r_y, r_z, v_x, v_y, v_z]');
+    end
+
+    r_list = data(:, 1:3);
+    v_list = data(:, 4:6);
+    return;
+end
