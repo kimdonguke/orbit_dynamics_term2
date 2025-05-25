@@ -153,8 +153,7 @@ function positions = get_position_on_circular_orbit_vec(r0, v0, mu, K_array, dt)
     positions = r_mag * (cos_theta .* r_hat' + sin_theta .* t_hat');  % Nx3
 end
 
-function [matching_indices, relative_velocities, total_area] = ...
-    find_proximity_and_area(r_sat_all, v_sat_all, ...
+function find_proximity_and_area(r_sat_all, v_sat_all, ...
                              r_obj_all, v_obj_all, ...
                              threshold, dt)
     % 입력:
@@ -175,11 +174,6 @@ function [matching_indices, relative_velocities, total_area] = ...
     v_rel = v_sat_all(matching_indices,:) - v_obj_all(matching_indices,:);
     relative_velocities = vecnorm(v_rel, 2, 2);  % M x 1
 
-    % 면적 계산
-    d_match = d(matching_indices);
-    area_k = relative_velocities .* dt .* d_match;
-    total_area = sum(area_k);
-
     % 면적 겹침 구간 찾기
     inside = d < threshold;  % N x 1 logical
     shift_inside = [false; inside(1:end-1)];
@@ -194,12 +188,18 @@ function [matching_indices, relative_velocities, total_area] = ...
         event_end(end) = [];  % 이상한 끼어듦 방지
     end
 
+    % 각 이벤트별 면적 계산
     event_count = length(event_start);
+    event_area_array = zeros(event_count, 1);
 
-    % 면적 근사 계산: A = sum( |v_rel| * dt * d )
-    d_match = d(matching_indices);  % M x 1
-    area_k = relative_velocities .* dt .* d_match;  % 각 시점 면적 기여량
-    total_area = sum(area_k);  % 총 면적 (접근 궤적 주변)
+    for i = 1:event_count
+        k1 = event_start(i);
+        k2 = event_end(i);
+        v_rel_seg = v_sat_all(k1:k2,:) - v_obj_all(k1:k2,:);
+        rel_speed = vecnorm(v_rel_seg, 2, 2);
+        seg_dist  = d(k1:k2);
+        event_area_array(i) = sum(rel_speed .* seg_dist * dt);
+    end
 
     return;
 end
