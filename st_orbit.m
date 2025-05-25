@@ -153,6 +153,42 @@ function positions = get_position_on_circular_orbit_vec(r0, v0, mu, K_array, dt)
     positions = r_mag * (cos_theta .* r_hat' + sin_theta .* t_hat');  % Nx3
 end
 
+function velocities = get_velocity_on_circular_orbit_vec(r0, v0, mu, K_array, dt)
+    % get_velocity_on_circular_orbit_vec
+    % ----------------------------------
+    % 입력:
+    %   r0      : 초기 위치 벡터 [3x1] (km)
+    %   v0      : 초기 속도 벡터 [3x1] (km/s)
+    %   mu      : 중심체 중력 상수 (km^3/s^2)
+    %   K_array : 시점 인덱스 배열 [1xN] 또는 [Nx1]
+    %   dt      : 시간 간격 (초)
+    %
+    % 출력:
+    %   velocities : 각 시점의 속도 [Nx3] 배열 (km/s)
+
+    % 1. 초기 단위 벡터들
+    r_mag = norm(r0);
+    r_hat = r0 / r_mag;
+
+    h_vec = cross(r0, v0);
+    h_hat = h_vec / norm(h_vec);
+    t_hat = cross(h_hat, r_hat);  % 초기 속도 방향
+
+    % 2. 속도 크기 (원운동)
+    v_mag = sqrt(mu / r_mag);
+
+    % 3. 회전각
+    theta = v_mag / r_mag * (K_array(:) * dt);  % Nx1
+
+    % 4. 속도 계산 (회전 후 접선 방향)
+    % v(t) = -sin(theta)*r̂ + cos(theta)*t̂
+    sin_theta = sin(theta);
+    cos_theta = cos(theta);
+
+    velocities = v_mag * (-sin_theta .* r_hat' + cos_theta .* t_hat');  % Nx3
+end
+
+
 function find_proximity_and_area(r_sat_all, v_sat_all, ...
                              r_obj_all, v_obj_all, ...
                              threshold, dt)
