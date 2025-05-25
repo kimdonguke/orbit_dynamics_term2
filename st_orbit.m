@@ -2,6 +2,7 @@
 clear;
 clc;
 
+data = readmatrix('orbit_data.xlsx');
 kepler_J2_simulation();
 
 function kepler_J2_simulation()
@@ -30,53 +31,9 @@ function kepler_J2_simulation()
     % --- 시간 설정 ---
     tspan = linspace(0, 86400*10, 30000); % n일간 30000포인트
 
-    % --- ODE 전파 (J2 반영) ---
+    % --- ODE 전파  ---
     opts = odeset('RelTol', 1e-12, 'AbsTol', 1e-14);
     [t, y] = ode45(@(t, y) two_body_j2_ode(t, y, mu, J2, Re), tspan, y0, opts);
-
-    % --- 궤도 요소 계산 (RAAN, ω, i) ---
-    RAAN_list = zeros(length(t),1);
-    omega_list = zeros(length(t),1);
-    inc_list = zeros(length(t),1);
-
-    for k = 1:length(t)
-        r_k = y(k,1:3)';
-        v_k = y(k,4:6)';
-        [~, ~, inc, RAAN, omega, ~] = rv_to_elements(r_k, v_k, mu);
-        RAAN_list(k) = rad2deg(mod(RAAN, 2*pi));
-        omega_list(k) = rad2deg(mod(omega, 2*pi));
-        inc_list(k) = rad2deg(inc);
-    end
-
-    % --- 결과 시각화 ---
-    figure;
-    subplot(3,1,1)
-    plot(t/86400, RAAN_list)
-    ylabel('\Omega [deg]')
-    title('RAAN 변화')
-
-    subplot(3,1,2)
-    plot(t/86400, omega_list)
-    ylabel('\omega [deg]')
-    title('근지점 인수 변화')
-
-    subplot(3,1,3)
-    plot(t/86400, inc_list)
-    ylabel('i [deg]')
-    xlabel('Time [days]')
-    title('경사각 변화')
-
-    plot_orbit_3D(t, y(:,1:3));  % 위치 벡터 전달
-
-    r = vecnorm(y(:,1:3), 2, 2);
-    v = vecnorm(y(:,4:6), 2, 2);
-    energy = 0.5 * v.^2 - mu ./ r;
-    
-    figure;
-    plot(t/86400, energy);
-    xlabel('Time [days]');
-    ylabel('Specific Energy [km^2/s^2]');
-    title('Total Mechanical Energy vs Time');
 
 
 end
