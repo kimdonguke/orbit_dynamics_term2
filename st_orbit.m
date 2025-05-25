@@ -2,15 +2,14 @@
 clear;
 clc;
 
-data = readmatrix('orbit_data.xlsx');
-kepler_J2_simulation();
+%data = readmatrix('orbit_data.xlsx');
+kepler_simulation();
 
-function kepler_J2_simulation()
+function kepler_simulation()
 
     % --- 상수 정의 ---
     mu = 398600.4418;     % [km^3/s^2]
     Re = 6378.137;        % [km]
-    J2 = 1.08263e-3;
     
     % --- 케플러 요소 정의 ---
     rp = Re + 250;        % 근지점 고도
@@ -33,14 +32,14 @@ function kepler_J2_simulation()
 
     % --- ODE 전파  ---
     opts = odeset('RelTol', 1e-12, 'AbsTol', 1e-14);
-    [t, y] = ode45(@(t, y) two_body_j2_ode(t, y, mu, J2, Re), tspan, y0, opts);
-
-
+    [t, y] = ode45(@(t, y) two_body_j2_ode(t, y, mu), tspan, y0, opts);
+    
+    plot_orbit_3D(t,y)
 end
 
 % ------------------------ 서브 함수들 ------------------------
 
-function dydt = two_body_j2_ode(~, y, mu, J2, Re)
+function dydt = two_body_j2_ode(~, y, mu)
     r_vec = y(1:3);
     v_vec = y(4:6);
     x = r_vec(1); y1 = r_vec(2); z = r_vec(3);
@@ -118,23 +117,37 @@ function plot_orbit_3D(t, r)
     view(30, 30); % 시각적 각도 조절
 end
 
-function r_eci = get_position_on_circular_orbit(r0, v0, omega, K, dt)
-    % r0: 초기 위치 (3x1 벡터)
-    % v0: 초기 속도 (3x1 벡터)
-    % omega: 각속도 [rad/s]
-    % K: 정수 시점 인덱스 (1부터 시작)
-    % dt: 시간 간격 [s]
-    % 반환: 시간 K*dt 후의 위치 (3x1)
+function positions = get_position_on_circular_orbit_vec(r0, v0, mu, K_array, dt)
+    % get_position_on_circular_orbit_vec
+    % ----------------------------------
+    % 입력:
+    %   r0      : 초기 위치 벡터 [3x1] (km)
+    %   v0      : 초기 속도 벡터 [3x1] (km/s)
+    %   mu      : 중심체 중력 상수 (km^3/s^2)
+    %   K_array : 시점 인덱스 배열 [1xN] 또는 [Nx1]
+    %   dt      : 시간 간격 (초)
+    %
+    % 출력:
+    %   positions : 각 시점의 위치 [Nx3] 배열 (km)
 
-    % 궤도 반지름 및 단위 벡터
+    % 1. 초기 단위 벡터들
     r_mag = norm(r0);
     r_hat = r0 / r_mag;
-    h_hat = cross(r0, v0); h_hat = h_hat / norm(h_hat);
-    t_hat = cross(h_hat, r_hat);  % 초기 접선 방향
 
-    % 회전각
-    theta = omega * (K * dt);
+    h_vec = cross(r0, v0);
+    h_hat = h_vec / norm(h_vec);
+    t_hat = cross(h_hat, r_hat);
 
-    % 위치 계산
-    r_eci = r_mag * (cos(theta) * r_hat + sin(theta) * t_hat);
+    % 2. 각속도
+    v_mag = norm(v0);
+    omega = v_mag / r_mag;
+
+    % 3. 회전각 배열
+    theta = omega * (K_array(:) * dt);  % Nx1
+
+    % 4. 위치 계산 (벡터화)
+    cos_theta = cos(theta);  % Nx1
+    sin_theta = sin(theta);  % Nx1
+
+    positions = r_mag * (cos_theta .* r_hat' + sin_theta .* t_hat');  % Nx3
 end
