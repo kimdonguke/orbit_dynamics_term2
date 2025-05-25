@@ -5,6 +5,7 @@ clc;
 %data = readmatrix('orbit_data.xlsx');
 kepler_simulation();
 
+%function kepler_simulation(data)
 function kepler_simulation()
 
     % --- 상수 정의 ---
@@ -150,4 +151,55 @@ function positions = get_position_on_circular_orbit_vec(r0, v0, mu, K_array, dt)
     sin_theta = sin(theta);  % Nx1
 
     positions = r_mag * (cos_theta .* r_hat' + sin_theta .* t_hat');  % Nx3
+end
+
+function [matching_indices, relative_velocities, total_area] = ...
+    find_proximity_and_area(r_sat_all, v_sat_all, ...
+                             r_obj_all, v_obj_all, ...
+                             threshold, dt)
+    % 입력:
+    %   r_sat_all : 위성 위치 [N x 3]
+    %   v_sat_all : 위성 속도 [N x 3]
+    %   r_obj_all : 객체 위치 [N x 3]
+    %   v_obj_all : 객체 속도 [N x 3]
+    %   threshold : 거리 임계값 [km]
+    %   dt        : 시간 간격 [s]
+
+    % 거리 계산 (벡터화)
+    d = vecnorm(r_sat_all - r_obj_all, 2, 2);  % N x 1
+
+    % 조건 만족하는 인덱스
+    matching_indices = find(d < threshold);
+
+    % 상대 속도 계산 (Nx3 → Mx3)
+    v_rel = v_sat_all(matching_indices,:) - v_obj_all(matching_indices,:);
+    relative_velocities = vecnorm(v_rel, 2, 2);  % M x 1
+
+    % 면적 계산
+    d_match = d(matching_indices);
+    area_k = relative_velocities .* dt .* d_match;
+    total_area = sum(area_k);
+
+    % 면적 겹침 구간 찾기
+    inside = d < threshold;  % N x 1 logical
+    shift_inside = [false; inside(1:end-1)];
+    event_start = find(~shift_inside & inside);  % 0→1
+    event_end   = find(shift_inside & ~inside);  % 1→0
+
+    % 예외 처리: 열려 있는 끝단 처리
+    if ~isempty(event_start) && (isempty(event_end) || event_end(1) < event_start(1))
+        event_end = [event_end; length(inside)];  % 마지막까지 붙어있을 경우
+    end
+    if length(event_end) > length(event_start)
+        event_end(end) = [];  % 이상한 끼어듦 방지
+    end
+
+    event_count = length(event_start);
+
+    % 면적 근사 계산: A = sum( |v_rel| * dt * d )
+    d_match = d(matching_indices);  % M x 1
+    area_k = relative_velocities .* dt .* d_match;  % 각 시점 면적 기여량
+    total_area = sum(area_k);  % 총 면적 (접근 궤적 주변)
+
+    return;
 end
