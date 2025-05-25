@@ -4,7 +4,6 @@ clc;
 
 kepler_J2_simulation();
 
-
 function kepler_J2_simulation()
 
     % --- 상수 정의 ---
@@ -29,10 +28,11 @@ function kepler_J2_simulation()
     y0 = [r0; v0];
 
     % --- 시간 설정 ---
-    tspan = linspace(0, 86400*15, 30000); % n일간 30000포인트
+    tspan = linspace(0, 86400*10, 30000); % n일간 30000포인트
 
     % --- ODE 전파 (J2 반영) ---
-    [t, y] = ode15s(@(t, y) two_body_j2_ode(t, y, mu, J2, Re), tspan, y0);
+    opts = odeset('RelTol', 1e-12, 'AbsTol', 1e-14);
+    [t, y] = ode45(@(t, y) two_body_j2_ode(t, y, mu, J2, Re), tspan, y0, opts);
 
     % --- 궤도 요소 계산 (RAAN, ω, i) ---
     RAAN_list = zeros(length(t),1);
@@ -68,6 +68,17 @@ function kepler_J2_simulation()
 
     plot_orbit_3D(t, y(:,1:3));  % 위치 벡터 전달
 
+    r = vecnorm(y(:,1:3), 2, 2);
+    v = vecnorm(y(:,4:6), 2, 2);
+    energy = 0.5 * v.^2 - mu ./ r;
+    
+    figure;
+    plot(t/86400, energy);
+    xlabel('Time [days]');
+    ylabel('Specific Energy [km^2/s^2]');
+    title('Total Mechanical Energy vs Time');
+
+
 end
 
 % ------------------------ 서브 함수들 ------------------------
@@ -79,15 +90,7 @@ function dydt = two_body_j2_ode(~, y, mu, J2, Re)
     r = norm(r_vec);
     
     a_grav = -mu / r^3 * r_vec;
-    factor = -1.5 * J2 * mu * Re^2 / r^5;
-    z2_r2 = (z/r)^2;
-    a_J2 = factor * [
-        x * (1 - 5*z2_r2);
-        y1 * (1 - 5*z2_r2);
-        z * (3 - 5*z2_r2)
-    ];
-    
-    a_total = a_grav + a_J2;
+    a_total = a_grav;
     dydt = [v_vec; a_total];
 end
 
@@ -102,6 +105,7 @@ function [r_eci, v_eci] = kepler_to_rv(elements, mu)
     p = a * (1 - e^2);
     r_pqw = (p / (1 + e*cos(nu))) * [cos(nu); sin(nu); 0];
     v_pqw = sqrt(mu/p) * [-sin(nu); e + cos(nu); 0];
+    
 
     R3_Omega = [cos(-RAAN), -sin(-RAAN), 0;
                 sin(-RAAN),  cos(-RAAN), 0;
@@ -155,4 +159,25 @@ function plot_orbit_3D(t, r)
     title('3D Orbit in ECI Frame');
     legend show;
     view(30, 30); % 시각적 각도 조절
+end
+
+function r_eci = get_position_on_circular_orbit(r0, v0, omega, K, dt)
+    % r0: 초기 위치 (3x1 벡터)
+    % v0: 초기 속도 (3x1 벡터)
+    % omega: 각속도 [rad/s]
+    % K: 정수 시점 인덱스 (1부터 시작)
+    % dt: 시간 간격 [s]
+    % 반환: 시간 K*dt 후의 위치 (3x1)
+
+    % 궤도 반지름 및 단위 벡터
+    r_mag = norm(r0);
+    r_hat = r0 / r_mag;
+    h_hat = cross(r0, v0); h_hat = h_hat / norm(h_hat);
+    t_hat = cross(h_hat, r_hat);  % 초기 접선 방향
+
+    % 회전각
+    theta = omega * (K * dt);
+
+    % 위치 계산
+    r_eci = r_mag * (cos(theta) * r_hat + sin(theta) * t_hat);
 end
