@@ -63,7 +63,9 @@ function kepler_simulation(r_list, v_list)
          start_times, end_times, durations] = ...
             find_proximity_and_area_with_events( ...
                 r_sat_all, v_sat_all, r_obj_all, v_obj_all, t_array, threshold);
-
+        % 이벤트 마커 저장
+        event_markers_list{i} = r_obj_all(match_idx, :);
+        
         % 출력
         fprintf('▶ 객체 %d\n', i);
         fprintf('  접근 이벤트: %d회\n', event_count);
