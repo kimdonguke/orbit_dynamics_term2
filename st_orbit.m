@@ -2,11 +2,16 @@
 clear;
 clc;
 
-%data = readmatrix('orbit_data.xlsx');
-kepler_simulation();
+data = readmatrix('orbit_data.xlsx');
+% 1. 엑셀 파일에서 데이터 읽기
 
-%function kepler_simulation(data)
-function kepler_simulation()
+% 2. 위치/속도 분리
+[r_list, v_list] = split_state_matrix(data);  % 각각 [M x 3]
+
+% 3. 시뮬레이션 실행
+kepler_simulation(r_list, v_list);
+
+function kepler_simulation(r_list, v_list)
 
     % --- 상수 정의 ---
     mu = 398600.4418;     % [km^3/s^2]
