@@ -340,3 +340,77 @@ function [match_idx, rel_v, total_area, event_count, event_area_array, ...
     end_times = t_array(event_end);
     durations = end_times - start_times;
 end
+
+function plot_orbit_3D_all(r_sat_all, object_positions_list, event_markers_list)
+    % plot_orbit_3D_all
+    % ------------------
+    % 위성 + 객체 궤도 + 지구를 함께 3D 시각화
+    % 사용자 입력으로 표시 여부 제어
+
+    if nargin < 3
+        event_markers_list = {};  % 이벤트 마커가 없다면 빈 셀
+    end
+
+    % 사용자 입력
+    show_objects = input('객체 궤도를 표시할까요? (1 = 예, 0 = 아니오): ');
+    show_events  = input('접근 이벤트 지점을 표시할까요? (1 = 예, 0 = 아니오): ');
+
+    % 시각화 준비
+    figure;
+    hold on;
+    grid on;
+    axis equal;
+
+    % 1. 지구 표시
+    Re = 6378.137;
+    [X, Y, Z] = sphere(50);
+    surf(Re*X, Re*Y, Re*Z, ...
+         'FaceAlpha', 0.3, 'EdgeColor', 'none', 'FaceColor', [0.4 0.7 1]);
+
+    % 2. 위성 궤도
+    plot3(r_sat_all(:,1), r_sat_all(:,2), r_sat_all(:,3), ...
+          'b-', 'LineWidth', 2.0, 'DisplayName', 'Satellite');
+
+    % 위성 시작점
+    plot3(r_sat_all(1,1), r_sat_all(1,2), r_sat_all(1,3), ...
+          'bo', 'MarkerFaceColor', 'b', 'DisplayName', 'Start (Satellite)');
+
+    % 3. 객체 궤도 (조건부)
+    if show_objects
+        M = length(object_positions_list);
+        cmap = lines(M);
+        for i = 1:M
+            r_obj = object_positions_list{i};
+
+            % 궤도
+            plot3(r_obj(:,1), r_obj(:,2), r_obj(:,3), ...
+                  'Color', cmap(i,:), 'LineWidth', 1.2, ...
+                  'DisplayName', sprintf('Object %d', i));
+
+            % 시작점 마커
+            plot3(r_obj(1,1), r_obj(1,2), r_obj(1,3), ...
+                  'o', 'MarkerEdgeColor', cmap(i,:), ...
+                  'MarkerFaceColor', cmap(i,:), ...
+                  'HandleVisibility', 'off');
+        end
+    end
+
+    % 4. 접근 이벤트 마커 (조건부)
+    if show_events && ~isempty(event_markers_list)
+        for i = 1:length(event_markers_list)
+            event_pts = event_markers_list{i};
+            if ~isempty(event_pts)
+                scatter3(event_pts(:,1), event_pts(:,2), event_pts(:,3), ...
+                         25, 'r', 'filled', 'DisplayName', sprintf('Event %d', i));
+            end
+        end
+    end
+
+    % 5. 라벨 및 보기
+    xlabel('X [km]');
+    ylabel('Y [km]');
+    zlabel('Z [km]');
+    title('3D Orbits of Satellite and Objects');
+    view(30, 30);
+    legend('Location', 'bestoutside');
+end
