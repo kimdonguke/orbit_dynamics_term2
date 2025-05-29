@@ -36,6 +36,7 @@ function kepler_simulation(r_list, v_list)
     % --- 시간 설정 ---
     tspan = linspace(0, 86400*10, 30000); % n일간 30000포인트
 
+    dt = tspan(2) - tspan(1);  % 이게 가장 안전하고 직관적
     % --- ODE 전파  ---
     opts = odeset('RelTol', 1e-12, 'AbsTol', 1e-14);
     [t, y] = ode45(@(t, y) two_body_j2_ode(t, y, mu), tspan, y0, opts);
