@@ -12,36 +12,67 @@ data = readmatrix('orbit_data.xlsx');
 kepler_simulation(r_list, v_list);
 
 function kepler_simulation(r_list, v_list)
+    % --- 상수 ---
+    mu = 398600.4418;
+    Re = 6378.137;
 
-    % --- 상수 정의 ---
-    mu = 398600.4418;     % [km^3/s^2]
-    Re = 6378.137;        % [km]
-    
-    % --- 케플러 요소 정의 ---
-    rp = Re + 250;        % 근지점 고도
-    ra = Re + 800;        % 원지점 고도
+    % --- 위성 초기 궤도 ---
+    rp = Re + 250;
+    ra = Re + 800;
     a = (rp + ra)/2;
     e = (ra - rp)/(ra + rp);
-    i_deg = 53;           % 경사각 [deg]
-    RAAN_deg = 40;        % 초기 RAAN
-    omega_deg = 60;       % 초기 근지점 인수
-    nu0_deg = 0;          % 초기 진이각
-
+    i_deg = 53;
+    RAAN_deg = 40;
+    omega_deg = 60;
+    nu0_deg = 0;
     elements = [a, e, i_deg, RAAN_deg, omega_deg, nu0_deg];
 
-    % --- 초기 상태 계산 ---
-    [r0, v0] = kepler_to_rv(elements, mu);
-    y0 = [r0; v0];
+    % --- 위성 초기 상태 계산 ---
+    [r0_sat, v0_sat] = kepler_to_rv(elements, mu);
+    y0 = [r0_sat; v0_sat];
 
     % --- 시간 설정 ---
-    tspan = linspace(0, 86400*10, 30000); % n일간 30000포인트
+    tspan = linspace(0, 86400*10, 30000);
+    dt = tspan(2) - tspan(1);   % ← 여기에 정확한 시간 간격 계산
+    t0 = tspan(1);
+    t_array = tspan(:);         % [N x 1]
 
-    dt = tspan(2) - tspan(1);  % 이게 가장 안전하고 직관적
-    % --- ODE 전파  ---
+    % --- 위성 궤도 전파 ---
     opts = odeset('RelTol', 1e-12, 'AbsTol', 1e-14);
-    [t, y] = ode45(@(t, y) two_body_j2_ode(t, y, mu), tspan, y0, opts);
-    
-    plot_orbit_3D(t,y)
+    [t, y] = ode45(@(t,y) two_body_j2_ode(t, y, mu), tspan, y0, opts);
+    r_sat_all = y(:,1:3);
+    v_sat_all = y(:,4:6);
+
+    % --- 객체 궤도 생성 ---
+    object_positions_list = generate_object_positions(r_list, v_list, mu, t_array, t0);
+
+    % --- 접근 이벤트 분석 ---
+    M = size(r_list, 1);
+    threshold = 100;  % [km]
+
+    for i = 1:M
+        r0_obj = r_list(i,:)';
+        v0_obj = v_list(i,:)';
+
+        % 위치 및 속도 배열
+        r_obj_all = get_position_on_circular_orbit_vec(r0_obj, v0_obj, mu, t_array, t0);
+        v_obj_all = get_velocity_on_circular_orbit_vec(r0_obj, v0_obj, mu, t_array, t0);
+
+        % 이벤트 분석
+        [match_idx, rel_v, total_area, event_count, event_area_array, ...
+         start_times, end_times, durations] = ...
+            find_proximity_and_area_with_events( ...
+                r_sat_all, v_sat_all, r_obj_all, v_obj_all, t_array, threshold);
+
+        % 출력
+        fprintf('▶ 객체 %d\n', i);
+        fprintf('  접근 이벤트: %d회\n', event_count);
+        fprintf('  총 면적: %.2f km^2\n', total_area);
+        fprintf('  각 이벤트 면적: %s\n', mat2str(event_area_array', 4));
+    end
+
+    % --- 시각화 ---
+    plot_orbit_3D_all(r_sat_all, object_positions_list);
 end
 
 % ------------------------ 서브 함수들 ------------------------
