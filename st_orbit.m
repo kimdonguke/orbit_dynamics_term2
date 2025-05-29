@@ -263,3 +263,48 @@ function [r_list, v_list] = split_state_matrix(data)
     v_list = data(:, 4:6);
     return;
 end
+
+function object_positions_list = generate_object_positions(r_list, v_list, mu, t_array, t0)
+    M = size(r_list, 1);
+    object_positions_list = cell(M, 1);
+    for i = 1:M
+        r0 = r_list(i,:)';
+        v0 = v_list(i,:)';
+        object_positions_list{i} = get_position_on_circular_orbit_vec(r0, v0, mu, t_array, t0);
+    end
+end
+
+function [match_idx, rel_v, total_area, event_count, event_area_array, ...
+          start_times, end_times, durations] = ...
+    find_proximity_and_area_with_events(r_sat, v_sat, r_obj, v_obj, t_array, threshold)
+
+    d = vecnorm(r_sat - r_obj, 2, 2);
+    inside = d < threshold;
+    shifted = [false; inside(1:end-1)];
+    event_start = find(~shifted & inside);
+    event_end   = find(shifted & ~inside);
+
+    if ~isempty(event_start) && (isempty(event_end) || event_end(1) < event_start(1))
+        event_end = [event_end; length(inside)];
+    end
+    if length(event_end) > length(event_start)
+        event_end(end) = [];
+    end
+
+    % 면적 계산
+    event_count = length(event_start);
+    event_area_array = zeros(event_count,1);
+    for i = 1:event_count
+        k1 = event_start(i); k2 = event_end(i);
+        v_rel = v_sat(k1:k2,:) - v_obj(k1:k2,:);
+        rel_speed = vecnorm(v_rel, 2, 2);
+        event_area_array(i) = sum(rel_speed .* d(k1:k2) * (t_array(2)-t_array(1)));
+    end
+
+    total_area = sum(event_area_array);
+    match_idx = find(inside);
+    rel_v = vecnorm(v_sat(inside,:) - v_obj(inside,:), 2, 2);
+    start_times = t_array(event_start);
+    end_times = t_array(event_end);
+    durations = end_times - start_times;
+end
