@@ -36,7 +36,9 @@ function kepler_simulation(r_list, v_list)
     dt = tspan(2) - tspan(1);   % ← 여기에 정확한 시간 간격 계산
     t0 = tspan(1);
     t_array = tspan(:);         % [N x 1]
-
+    N = length(t_array);                     % 총 시점 수
+    K_array = (0:N-1)';                      % 인덱스 배열
+    
     % --- 위성 궤도 전파 ---
     opts = odeset('RelTol', 1e-12, 'AbsTol', 1e-14);
     [t, y] = ode45(@(t,y) two_body_j2_ode(t, y, mu), tspan, y0, opts);
@@ -55,8 +57,8 @@ function kepler_simulation(r_list, v_list)
         v0_obj = v_list(i,:)';
 
         % 위치 및 속도 배열
-        r_obj_all = get_position_on_circular_orbit_vec(r0_obj, v0_obj, mu, t_array, t0);
-        v_obj_all = get_velocity_on_circular_orbit_vec(r0_obj, v0_obj, mu, t_array, t0);
+        r_obj_all = get_position_on_circular_orbit_vec(r0_obj, v0_obj, mu, K_array, dt);
+        v_obj_all = get_velocity_on_circular_orbit_vec(r0_obj, v0_obj, mu, K_array, dt);
 
         % 이벤트 분석
         [match_idx, rel_v, total_area, event_count, event_area_array, ...
