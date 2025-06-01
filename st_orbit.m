@@ -27,19 +27,7 @@ function kepler_simulation(r_list, v_list)
     [r0_sat, v0_sat] = kepler_to_rv(elements, mu);
     y0 = [r0_sat; v0_sat];
 
-    % --- 시간 설정 ---
-
-    tspan = linspace(0, 86400*10, 30000); % n일간 30000포인트
-
-    % --- ODE 전파  ---
-    opts = odeset('RelTol', 1e-12, 'AbsTol', 1e-14);
-    [t, y] = ode45(@(t, y) two_body_j2_ode(t, y, mu), tspan, y0, opts);
-
-    t_array = t;       % N x 1
-    t0 = t(1);         % 일반적으로 0
-
-
-    tspan = linspace(0, 86400*10, 30000);
+    tspan = linspace(0, 86400*20, 90000);
     dt = tspan(2) - tspan(1);   % ← 여기에 정확한 시간 간격 계산
     t0 = tspan(1);
     t_array = tspan(:);         % [N x 1]
@@ -60,6 +48,8 @@ function kepler_simulation(r_list, v_list)
     M = size(r_list, 1);
     threshold = 100;  % [km]
 
+    a=0;
+
     for i = 1:M
         r0_obj = r_list(i,:)';
         v0_obj = v_list(i,:)';
@@ -75,6 +65,7 @@ function kepler_simulation(r_list, v_list)
                 r_sat_all, v_sat_all, r_obj_all, v_obj_all, t_array, threshold);
         % 이벤트 마커 저장
         event_markers_list{i} = r_obj_all(match_idx, :);
+        a=a+event_count;
         
         % 출력
         fprintf('▶ 객체 %d\n', i);
@@ -82,6 +73,8 @@ function kepler_simulation(r_list, v_list)
         fprintf('  총 면적: %.2f km^2\n', total_area);
         fprintf('  각 이벤트 면적: %s\n', mat2str(event_area_array', 4));
     end
+    
+    disp(a);
 
     % --- 시각화 ---
     plot_orbit_3D_all(r_sat_all, object_positions_list,event_markers_list);
