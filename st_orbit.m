@@ -1,8 +1,11 @@
 %1st commit
-clear;
 clc;
+clear;
 
 %data = readmatrix('orbit_data.xlsx');
+%[r_list, v_list] = split_state_matrix(data)
+
+%kepler_simulation(r_list,v_list);
 kepler_simulation();
 
 %function kepler_simulation(data)
@@ -34,6 +37,10 @@ function kepler_simulation()
     % --- ODE 전파  ---
     opts = odeset('RelTol', 1e-12, 'AbsTol', 1e-14);
     [t, y] = ode45(@(t, y) two_body_j2_ode(t, y, mu), tspan, y0, opts);
+
+    t_array = t;       % N x 1
+    t0 = t(1);         % 일반적으로 0
+
     
     plot_orbit_3D(t,y)
 end
@@ -118,13 +125,12 @@ function plot_orbit_3D(t, r)
     view(30, 30); % 시각적 각도 조절
 end
 
-function positions = get_position_on_circular_orbit_vec(r0, v0, mu, K_array, dt)
+function positions = get_position_on_circular_orbit_vec(r0, v0, t_array, t0)
     % get_position_on_circular_orbit_vec
     % ----------------------------------
     % 입력:
     %   r0      : 초기 위치 벡터 [3x1] (km)
     %   v0      : 초기 속도 벡터 [3x1] (km/s)
-    %   mu      : 중심체 중력 상수 (km^3/s^2)
     %   K_array : 시점 인덱스 배열 [1xN] 또는 [Nx1]
     %   dt      : 시간 간격 (초)
     %
@@ -139,12 +145,14 @@ function positions = get_position_on_circular_orbit_vec(r0, v0, mu, K_array, dt)
     h_hat = h_vec / norm(h_vec);
     t_hat = cross(h_hat, r_hat);
 
+
+
     % 2. 각속도
     v_mag = norm(v0);
     omega = v_mag / r_mag;
 
     % 3. 회전각 배열
-    theta = omega * (K_array(:) * dt);  % Nx1
+    theta = omega * (t_array(:) - t0);  % Nx1
 
     % 4. 위치 계산 (벡터화)
     cos_theta = cos(theta);  % Nx1
