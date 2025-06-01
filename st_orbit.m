@@ -2,36 +2,33 @@
 clc;
 clear;
 
-%data = readmatrix('orbit_data.xlsx');
-%[r_list, v_list] = split_state_matrix(data)
+data = readmatrix('orbit_data.xlsx');
+[r_list, v_list] = split_state_matrix(data);
 
-%kepler_simulation(r_list,v_list);
-kepler_simulation();
+kepler_simulation(r_list,v_list);
 
-%function kepler_simulation(data)
-function kepler_simulation()
+function kepler_simulation(r_list, v_list)
+    % --- 상수 ---
+    mu = 398600.4418;
+    Re = 6378.137;
 
-    % --- 상수 정의 ---
-    mu = 398600.4418;     % [km^3/s^2]
-    Re = 6378.137;        % [km]
-    
-    % --- 케플러 요소 정의 ---
-    rp = Re + 250;        % 근지점 고도
-    ra = Re + 800;        % 원지점 고도
+    % --- 위성 초기 궤도 ---
+    rp = Re + 250;
+    ra = Re + 800;
     a = (rp + ra)/2;
     e = (ra - rp)/(ra + rp);
-    i_deg = 53;           % 경사각 [deg]
-    RAAN_deg = 40;        % 초기 RAAN
-    omega_deg = 60;       % 초기 근지점 인수
-    nu0_deg = 0;          % 초기 진이각
-
+    i_deg = 53;
+    RAAN_deg = 40;
+    omega_deg = 60;
+    nu0_deg = 0;
     elements = [a, e, i_deg, RAAN_deg, omega_deg, nu0_deg];
 
-    % --- 초기 상태 계산 ---
-    [r0, v0] = kepler_to_rv(elements, mu);
-    y0 = [r0; v0];
+    % --- 위성 초기 상태 계산 ---
+    [r0_sat, v0_sat] = kepler_to_rv(elements, mu);
+    y0 = [r0_sat; v0_sat];
 
     % --- 시간 설정 ---
+
     tspan = linspace(0, 86400*10, 30000); % n일간 30000포인트
 
     % --- ODE 전파  ---
@@ -41,8 +38,53 @@ function kepler_simulation()
     t_array = t;       % N x 1
     t0 = t(1);         % 일반적으로 0
 
+
+    tspan = linspace(0, 86400*10, 30000);
+    dt = tspan(2) - tspan(1);   % ← 여기에 정확한 시간 간격 계산
+    t0 = tspan(1);
+    t_array = tspan(:);         % [N x 1]
+    N = length(t_array);                     % 총 시점 수
+    K_array = (0:N-1)';                      % 인덱스 배열
+
     
-    plot_orbit_3D(t,y)
+    % --- 위성 궤도 전파 ---
+    opts = odeset('RelTol', 1e-12, 'AbsTol', 1e-14);
+    [t, y] = ode45(@(t,y) two_body_j2_ode(t, y, mu), tspan, y0, opts);
+    r_sat_all = y(:,1:3);
+    v_sat_all = y(:,4:6);
+
+    % --- 객체 궤도 생성 ---
+    object_positions_list = generate_object_positions(r_list, v_list, mu, t_array, t0);
+
+    % --- 접근 이벤트 분석 ---
+    M = size(r_list, 1);
+    threshold = 100;  % [km]
+
+    for i = 1:M
+        r0_obj = r_list(i,:)';
+        v0_obj = v_list(i,:)';
+
+        % 위치 및 속도 배열
+        r_obj_all = get_position_on_circular_orbit_vec(r0_obj, v0_obj, K_array, dt);
+        v_obj_all = get_velocity_on_circular_orbit_vec(r0_obj, v0_obj, mu, K_array, dt);
+
+        % 이벤트 분석
+        [match_idx, rel_v, total_area, event_count, event_area_array, ...
+         start_times, end_times, durations] = ...
+            find_proximity_and_area_with_events( ...
+                r_sat_all, v_sat_all, r_obj_all, v_obj_all, t_array, threshold);
+        % 이벤트 마커 저장
+        event_markers_list{i} = r_obj_all(match_idx, :);
+        
+        % 출력
+        fprintf('▶ 객체 %d\n', i);
+        fprintf('  접근 이벤트: %d회\n', event_count);
+        fprintf('  총 면적: %.2f km^2\n', total_area);
+        fprintf('  각 이벤트 면적: %s\n', mat2str(event_area_array', 4));
+    end
+
+    % --- 시각화 ---
+    plot_orbit_3D_all(r_sat_all, object_positions_list,event_markers_list);
 end
 
 % ------------------------ 서브 함수들 ------------------------
@@ -265,4 +307,123 @@ function [r_list, v_list] = split_state_matrix(data)
     r_list = data(:, 1:3);
     v_list = data(:, 4:6);
     return;
+end
+
+function object_positions_list = generate_object_positions(r_list, v_list, mu, t_array, t0)
+    M = size(r_list, 1);
+    object_positions_list = cell(M, 1);
+    for i = 1:M
+        r0 = r_list(i,:)';
+        v0 = v_list(i,:)';
+        object_positions_list{i} = get_position_on_circular_orbit_vec(r0, v0, t_array, t0);
+    end
+end
+
+function [match_idx, rel_v, total_area, event_count, event_area_array, ...
+          start_times, end_times, durations] = ...
+    find_proximity_and_area_with_events(r_sat, v_sat, r_obj, v_obj, t_array, threshold)
+
+    d = vecnorm(r_sat - r_obj, 2, 2);
+    inside = d < threshold;
+    shifted = [false; inside(1:end-1)];
+    event_start = find(~shifted & inside);
+    event_end   = find(shifted & ~inside);
+
+    if ~isempty(event_start) && (isempty(event_end) || event_end(1) < event_start(1))
+        event_end = [event_end; length(inside)];
+    end
+    if length(event_end) > length(event_start)
+        event_end(end) = [];
+    end
+
+    % 면적 계산
+    event_count = length(event_start);
+    event_area_array = zeros(event_count,1);
+    for i = 1:event_count
+        k1 = event_start(i); k2 = event_end(i);
+        v_rel = v_sat(k1:k2,:) - v_obj(k1:k2,:);
+        rel_speed = vecnorm(v_rel, 2, 2);
+        event_area_array(i) = sum(rel_speed .* d(k1:k2) * (t_array(2)-t_array(1)));
+    end
+
+    total_area = sum(event_area_array);
+    match_idx = find(inside);
+    rel_v = vecnorm(v_sat(inside,:) - v_obj(inside,:), 2, 2);
+    start_times = t_array(event_start);
+    end_times = t_array(event_end);
+    durations = end_times - start_times;
+end
+
+function plot_orbit_3D_all(r_sat_all, object_positions_list, event_markers_list)
+    % plot_orbit_3D_all
+    % ------------------
+    % 위성 + 객체 궤도 + 지구를 함께 3D 시각화
+    % 사용자 입력으로 표시 여부 제어
+
+    if nargin < 3
+        event_markers_list = {};  % 이벤트 마커가 없다면 빈 셀
+    end
+
+    % 사용자 입력
+    show_objects = input('객체 궤도를 표시할까요? (1 = 예, 0 = 아니오): ');
+    show_events  = input('접근 이벤트 지점을 표시할까요? (1 = 예, 0 = 아니오): ');
+
+    % 시각화 준비
+    figure;
+    hold on;
+    grid on;
+    axis equal;
+
+    % 1. 지구 표시
+    Re = 6378.137;
+    [X, Y, Z] = sphere(50);
+    surf(Re*X, Re*Y, Re*Z, ...
+         'FaceAlpha', 0.3, 'EdgeColor', 'none', 'FaceColor', [0.4 0.7 1]);
+
+    % 2. 위성 궤도
+    plot3(r_sat_all(:,1), r_sat_all(:,2), r_sat_all(:,3), ...
+          'b-', 'LineWidth', 2.0, 'DisplayName', 'Satellite');
+
+    % 위성 시작점
+    plot3(r_sat_all(1,1), r_sat_all(1,2), r_sat_all(1,3), ...
+          'bo', 'MarkerFaceColor', 'b', 'DisplayName', 'Start (Satellite)');
+
+    % 3. 객체 궤도 (조건부)
+    if show_objects
+        M = length(object_positions_list);
+        cmap = lines(M);
+        for i = 1:M
+            r_obj = object_positions_list{i};
+
+            % 궤도
+            plot3(r_obj(:,1), r_obj(:,2), r_obj(:,3), ...
+                  'Color', cmap(i,:), 'LineWidth', 1.2, ...
+                  'DisplayName', sprintf('Object %d', i));
+
+            % 시작점 마커
+            %plot3(r_obj(1,1), r_obj(1,2), r_obj(1,3), ...
+             %     'o', 'MarkerEdgeColor', cmap(i,:), ...
+              %    'MarkerFaceColor', cmap(i,:), ...
+               %   'HandleVisibility', 'off');
+        end
+    end
+
+    % 4. 접근 이벤트 마커 (조건부)
+    if show_events && ~isempty(event_markers_list)
+        for i = 1:length(event_markers_list)
+            event_pts = event_markers_list{i};
+            if ~isempty(event_pts)
+                scatter3(event_pts(:,1), event_pts(:,2), event_pts(:,3), ...
+                         25, 'r', 'filled', 'DisplayName', sprintf('Event %d', i));
+            end
+        end
+    end
+
+    % 5. 라벨 및 보기
+    xlabel('X [km]');
+    ylabel('Y [km]');
+    zlabel('Z [km]');
+    title('3D Orbits of Satellite and Objects');
+    view(30, 30);
+    legend('Location', 'bestoutside');
 end
