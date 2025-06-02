@@ -1,0 +1,56 @@
+data = readtable('orbit_states_only.xlsx'); % 위치 데이터 로드
+x = data.r_x; % x 좌표
+y = data.r_y; % y 좌표
+z = data.r_z; % z 좌표
+
+r = sqrt(x.^2 + y.^2 + z.^2); % 거리
+ra = atan2d(y, x); % 적경
+dec = asind(z ./ r); % 적위
+
+density = ones(size(x)); % 각 위치에서의 밀도 (단위: 개/m^3)
+
+scatter3(x, y, z, 10, density, 'filled');
+colormap jet;
+colorbar;
+xlabel('X [m]');
+ylabel('Y [m]');
+zlabel('Z [m]');
+title('Space Debris Density Distribution');
+
+i = 98.7542; % 경사각 
+h = [0.3048, 0.9402, -0.1522]; % 각운동량 벡터
+
+best_coverage = 0;
+best_Omega = 0;
+for Omega = 0:1:360
+    % Ω에 따른 궤도 평면 정의
+    R = [cosd(Omega), -sind(Omega), 0;
+         sind(Omega), cosd(Omega), 0;
+         0, 0, 1];
+    h_rot = R * h'; % 회전된 각운동량 벡터
+
+    % 우주쓰레기 밀집 지역 커버리지 계산
+    coverage = 0;
+    for j = 1:length(ra)
+        % 우주쓰레기 위치 계산 (적경, 적위 -> 직교 좌표 변환)
+        x = cosd(dec(j)) * cosd(ra(j));
+        y = cosd(dec(j)) * sind(ra(j));
+        z = sind(dec(j));
+
+        % 위성 궤도 평면과의 교차 여부 확인
+        if dot(h_rot, [x, y, z]) > 0
+            coverage = coverage + density(j);
+        end
+    end
+
+    % 최적 커버리지 갱신
+    if coverage > best_coverage
+        best_coverage = coverage;
+        best_Omega = Omega;
+    end
+end
+
+% 결과 출력
+disp(['최적 상승 노드 경도(Ω): ', num2str(best_Omega), '도']);
+disp(['최대 커버리지: ', num2str(best_coverage)]);
+
