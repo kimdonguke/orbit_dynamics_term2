@@ -2,12 +2,20 @@
 clc;
 clear;
 
-data = readmatrix('orbit_data.xlsx');
-[r_list, v_list] = split_state_matrix(data);
+[r_ECI, v_ECI,main_h_direction] = read_r_v('FENGYUN 1C.txt');
 
-kepler_simulation(r_list,v_list);
+trash_location = [r_ECI(:,1), r_ECI(:,2), r_ECI(:,3)];
+trash_velocity = [v_ECI(:,1), v_ECI(:,2), v_ECI(:,3)];
+% most, h_unit = [0.3048 0.9402 -0.1522]
 
-function kepler_simulation(r_list, v_list)
+main_h_direction = [0.3048, 0.9402, -0.1522];
+
+[n, i, RAAN] = h_to_n_i_RAAN(main_h_direction);
+
+%%
+y=kepler_simulation(r_ECI,v_ECI);
+
+function y=kepler_simulation(r_list, v_list)
     % --- 상수 ---
     mu = 398600.4418;
     Re = 6378.137;
@@ -17,17 +25,19 @@ function kepler_simulation(r_list, v_list)
     ra = Re + 800;
     a = (rp + ra)/2;
     e = (ra - rp)/(ra + rp);
-    i_deg = 53;
-    RAAN_deg = 40;
-    omega_deg = 60;
+    i_deg = 98.7542;
+    RAAN_deg = 162.0380;  
+    omega_deg = 14;
     nu0_deg = 0;
     elements = [a, e, i_deg, RAAN_deg, omega_deg, nu0_deg];
 
     % --- 위성 초기 상태 계산 ---
     [r0_sat, v0_sat] = kepler_to_rv(elements, mu);
     y0 = [r0_sat; v0_sat];
+    
 
-    tspan = linspace(0, 86400*20, 90000);
+    k=3;
+    tspan = linspace(0, 86400*k, k*8640);
     dt = tspan(2) - tspan(1);   % ← 여기에 정확한 시간 간격 계산
     t0 = tspan(1);
     t_array = tspan(:);         % [N x 1]
@@ -46,7 +56,7 @@ function kepler_simulation(r_list, v_list)
 
     % --- 접근 이벤트 분석 ---
     M = size(r_list, 1);
-    threshold = 100;  % [km]
+    threshold = 50;  % [km]
 
     a=0;
 
@@ -65,7 +75,11 @@ function kepler_simulation(r_list, v_list)
                 r_sat_all, v_sat_all, r_obj_all, v_obj_all, t_array, threshold);
         % 이벤트 마커 저장
         event_markers_list{i} = r_obj_all(match_idx, :);
-        a=a+event_count;
+
+        if event_count >= 1
+            a=a+1;
+        end
+       
         
         % 출력
         fprintf('▶ 객체 %d\n', i);
@@ -390,8 +404,7 @@ function plot_orbit_3D_all(r_sat_all, object_positions_list, event_markers_list)
 
             % 궤도
             plot3(r_obj(:,1), r_obj(:,2), r_obj(:,3), ...
-                  'Color', cmap(i,:), 'LineWidth', 1.2, ...
-                  'DisplayName', sprintf('Object %d', i));
+                  'Color', cmap(i,:), 'LineWidth', 1.2);
 
             % 시작점 마커
             %plot3(r_obj(1,1), r_obj(1,2), r_obj(1,3), ...
@@ -407,7 +420,7 @@ function plot_orbit_3D_all(r_sat_all, object_positions_list, event_markers_list)
             event_pts = event_markers_list{i};
             if ~isempty(event_pts)
                 scatter3(event_pts(:,1), event_pts(:,2), event_pts(:,3), ...
-                         25, 'r', 'filled', 'DisplayName', sprintf('Event %d', i));
+                         25, 'r', 'filled');
             end
         end
     end
@@ -420,3 +433,9 @@ function plot_orbit_3D_all(r_sat_all, object_positions_list, event_markers_list)
     view(30, 30);
     legend('Location', 'bestoutside');
 end
+
+figure;
+plot3(y(:,1), y(:,2), y(:,3));
+grid on;
+axis equal;
+view(3);
